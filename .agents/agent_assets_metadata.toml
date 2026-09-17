@@ -1,0 +1,17 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "nsqP_s7sqLpn1GBp-c0Vp"
+uri = "file://.local/conversation-workspace/files/plan/rhythmath-master-plan.html"
+type = "text"
+title = "Rhythmath — Master Plan (open-source, in-house)"
+description = "Consolidated strategy, architecture, roadmap, open-source licensing, data/legal plan, scoreboard, and a two-week sprint plan, derived from your six-phase document and a September 2026 market review."
+logical_id = "aaf51e38-c68e-4415-96c0-4570898b48d9"
+content_hash = "sha256:4ce47a97d559855203c572acb35a9bac8c3d4be1693170ab02c06a4975f746c2"
+size = 33079
+mtime_ms = 1789623692738
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/conversation:293ba95a-2615-4d94-a6b3-8a605e986a41/aaf51e38-c68e-4415-96c0-4570898b48d9/1ac1fcdb-c67a-41d1-880c-fd83aac5df99"
+storage_version_token = "1789623699459510"
+content_type = "text/html"
+source_uri = "file://plan/rhythmath-master-plan.html"

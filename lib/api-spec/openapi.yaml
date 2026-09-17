@@ -1,0 +1,895 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Rhythmath platform API — projects, sample kits, generation telemetry and auth.
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: Auth
+    description: Browser and mobile authentication endpoints.
+  - name: projects
+    description: Saved grooves (patterns) owned by the signed-in user
+  - name: kits
+    description: User sample kits and uploaded samples
+  - name: generations
+    description: Generation telemetry (anonymous, aggregate)
+  - name: stats
+    description: Public aggregate statistics and activity
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ---------------------------------------------------------------- Auth
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the currently authenticated user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Auth status resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start the browser OIDC login flow
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          description: Relative path to redirect to after login (must start with `/`). Defaults to `/`.
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to the OIDC authorization endpoint.
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete the browser OIDC login flow
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: iss
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uri
+      responses:
+        '302':
+          description: Redirect to the `returnTo` path on success (defaults to `/`) or `/api/login` on failure.
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Clear the session and begin OIDC logout
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+            default: /
+      responses:
+        '302':
+          description: Redirect to the OIDC provider logout URL with a post-logout redirect back to the validated `returnTo` path.
+  /mobile-auth/token-exchange:
+    post:
+      tags: [Auth]
+      operationId: exchangeMobileAuthorizationCode
+      summary: Exchange a mobile OIDC code for a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileTokenExchangeRequest'
+      responses:
+        '200':
+          description: Session created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileTokenExchangeSuccess'
+        '400':
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Token did not contain usable claims.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Token exchange failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile-auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutMobileSession
+      summary: Delete a mobile session token
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        '200':
+          description: Logout processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutSuccess'
+
+  # ---------------------------------------------------------------- Projects
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List the signed-in user's saved projects (newest first)
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Save a new project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /projects/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get one project
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    put:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project (name, tempo, pattern, kit)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /projects/{id}/duplicate:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: duplicateProject
+      tags: [projects]
+      summary: Duplicate a project into a new one named "<name> (copy)"
+      responses:
+        "201":
+          description: Created copy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  # ---------------------------------------------------------------- Kits & samples
+  /kits:
+    get:
+      operationId: listKits
+      tags: [kits]
+      summary: List the signed-in user's custom sample kits
+      responses:
+        "200":
+          description: Kits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Kit"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      operationId: createKit
+      tags: [kits]
+      summary: Create an empty custom kit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KitInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Kit"
+  /kits/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getKit
+      tags: [kits]
+      summary: Get a kit with its samples
+      responses:
+        "200":
+          description: Kit with samples
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KitDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      operationId: deleteKit
+      tags: [kits]
+      summary: Delete a kit and all of its samples
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /kits/{id}/samples:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: uploadSample
+      tags: [kits]
+      summary: Upload one sample (WAV/MP3/FLAC/OGG, max 10 MB) into a kit
+      description: Multipart form. The uploader must accept the Sample Contributor License (licenseAccepted = "true").
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/SampleUpload"
+      responses:
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sample"
+        "400":
+          description: Invalid upload (bad type, too large, license not accepted)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /samples/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: deleteSample
+      tags: [kits]
+      summary: Delete one sample
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /samples/{id}/audio:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: streamSampleAudio
+      tags: [kits]
+      summary: Stream one sample to its owner
+      responses:
+        "200":
+          description: Audio bytes
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            audio/*:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  # ---------------------------------------------------------------- Generations & stats
+  /generations:
+    post:
+      operationId: recordGeneration
+      tags: [generations]
+      summary: Record one generation run (anonymous telemetry, powers the public stats)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerationInput"
+      responses:
+        "201":
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Generation"
+  /stats:
+    get:
+      operationId: getStats
+      tags: [stats]
+      summary: Public aggregate statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stats"
+  /activity:
+    get:
+      operationId: getRecentActivity
+      tags: [stats]
+      summary: Recent public activity (last 20 generations and saves, anonymised)
+      responses:
+        "200":
+          description: Activity feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      description: Opaque session token — `Bearer <sid>`.
+      schema:
+        type: string
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      description: Browser session cookie.
+      schema:
+        type: string
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    # ---- Auth
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl]
+      properties:
+        id:
+          type: string
+        email:
+          type: [string, 'null']
+          format: email
+        firstName:
+          type: [string, 'null']
+        lastName:
+          type: [string, 'null']
+        profileImageUrl:
+          type: [string, 'null']
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: 'null'
+    MobileTokenExchangeRequest:
+      type: object
+      required: [code, code_verifier, redirect_uri, state]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        code_verifier:
+          type: string
+          minLength: 1
+        redirect_uri:
+          type: string
+          minLength: 1
+          format: uri
+        state:
+          type: string
+          minLength: 1
+        nonce:
+          type: string
+          minLength: 1
+    MobileTokenExchangeSuccess:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+    LogoutSuccess:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    # ---- Domain
+    Tradition:
+      type: string
+      enum: [samba, arabic]
+      description: Rhythmic tradition of a grammar
+    Meter:
+      type: object
+      required: [beatsPerBar, beatUnit, stepsPerBeat]
+      properties:
+        beatsPerBar:
+          type: integer
+          minimum: 1
+          maximum: 16
+        beatUnit:
+          type: integer
+          enum: [4, 8]
+        stepsPerBeat:
+          type: integer
+          minimum: 1
+          maximum: 8
+    DrumEvent:
+      type: object
+      required: [step, instrument, velocity]
+      properties:
+        step:
+          type: integer
+          minimum: 0
+        microOffset:
+          type: number
+          minimum: -0.5
+          maximum: 0.5
+          default: 0
+        instrument:
+          type: string
+        velocity:
+          type: number
+          minimum: 0
+          maximum: 1
+    Pattern:
+      type: object
+      description: Engine DrumPattern JSON (see @workspace/engine)
+      required: [id, tradition, style, meter, bars, tempo, instruments, events]
+      properties:
+        id:
+          type: string
+        tradition:
+          $ref: "#/components/schemas/Tradition"
+        style:
+          type: string
+          description: Grammar id, e.g. samba.batucada or arabic.maqsum
+        meter:
+          $ref: "#/components/schemas/Meter"
+        bars:
+          type: integer
+          minimum: 1
+          maximum: 64
+        tempo:
+          type: number
+          minimum: 30
+          maximum: 300
+        swing:
+          type: number
+          minimum: 0.5
+          maximum: 0.75
+        instruments:
+          type: array
+          items:
+            type: string
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/DrumEvent"
+    Project:
+      type: object
+      required: [id, ownerId, name, tradition, style, tempo, bars, meter, pattern, kitId, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        ownerId:
+          type: string
+        name:
+          type: string
+        tradition:
+          $ref: "#/components/schemas/Tradition"
+        style:
+          type: string
+        tempo:
+          type: number
+        bars:
+          type: integer
+        meter:
+          $ref: "#/components/schemas/Meter"
+        pattern:
+          $ref: "#/components/schemas/Pattern"
+        kitId:
+          type: [string, "null"]
+          description: Custom kit id, or null for the built-in starter kit
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ProjectInput:
+      type: object
+      required: [name, pattern]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        pattern:
+          $ref: "#/components/schemas/Pattern"
+        kitId:
+          type: [string, "null"]
+    ProjectUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        pattern:
+          $ref: "#/components/schemas/Pattern"
+        kitId:
+          type: [string, "null"]
+
+    Kit:
+      type: object
+      required: [id, ownerId, name, tradition, sampleCount, createdAt]
+      properties:
+        id:
+          type: string
+        ownerId:
+          type: string
+        name:
+          type: string
+        tradition:
+          $ref: "#/components/schemas/Tradition"
+        sampleCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+    KitInput:
+      type: object
+      required: [name, tradition]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        tradition:
+          $ref: "#/components/schemas/Tradition"
+    Sample:
+      type: object
+      required: [id, kitId, instrument, band, url, originalName, sizeBytes, mimeType, sha256, createdAt]
+      properties:
+        id:
+          type: string
+        kitId:
+          type: string
+        instrument:
+          type: string
+          description: Engine instrument id, e.g. surdo1, caixa, darbuka_dum
+        band:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Velocity band 0 (softest) .. 3 (loudest)
+        url:
+          type: string
+          description: Streamable audio URL (served by the API)
+        originalName:
+          type: string
+        sizeBytes:
+          type: integer
+        mimeType:
+          type: string
+        sha256:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    KitDetail:
+      allOf:
+        - $ref: "#/components/schemas/Kit"
+        - type: object
+          required: [samples]
+          properties:
+            samples:
+              type: array
+              items:
+                $ref: "#/components/schemas/Sample"
+    SampleUpload:
+      type: object
+      required: [file, instrument, band, licenseAccepted]
+      properties:
+        file:
+          type: string
+          format: binary
+        instrument:
+          type: string
+        band:
+          type: string
+          description: "0..3 as a string (multipart fields are strings)"
+        licenseAccepted:
+          type: string
+          description: Must be the string "true"
+
+    GenerationInput:
+      type: object
+      required: [tradition, style, tempo, bars, candidateCount, bestScore]
+      properties:
+        tradition:
+          $ref: "#/components/schemas/Tradition"
+        style:
+          type: string
+        tempo:
+          type: number
+        bars:
+          type: integer
+        candidateCount:
+          type: integer
+        bestScore:
+          type: number
+        durationMs:
+          type: number
+          description: Client-side wall time of the generation run
+    Generation:
+      type: object
+      required: [id, tradition, style, tempo, bars, candidateCount, bestScore, createdAt]
+      properties:
+        id:
+          type: string
+        tradition:
+          $ref: "#/components/schemas/Tradition"
+        style:
+          type: string
+        tempo:
+          type: number
+        bars:
+          type: integer
+        candidateCount:
+          type: integer
+        bestScore:
+          type: number
+        durationMs:
+          type: [number, "null"]
+        createdAt:
+          type: string
+          format: date-time
+    TraditionCount:
+      type: object
+      required: [tradition, count]
+      properties:
+        tradition:
+          $ref: "#/components/schemas/Tradition"
+        count:
+          type: integer
+    StyleCount:
+      type: object
+      required: [style, tradition, count]
+      properties:
+        style:
+          type: string
+        tradition:
+          $ref: "#/components/schemas/Tradition"
+        count:
+          type: integer
+    Stats:
+      type: object
+      required: [projects, generations, samplesUploaded, averageGenerationMs, generationsByTradition, topStyles]
+      properties:
+        projects:
+          type: integer
+        generations:
+          type: integer
+        samplesUploaded:
+          type: integer
+        averageGenerationMs:
+          type: [number, "null"]
+        generationsByTradition:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraditionCount"
+        topStyles:
+          type: array
+          items:
+            $ref: "#/components/schemas/StyleCount"
+    ActivityItem:
+      type: object
+      required: [id, kind, tradition, style, tempo, createdAt]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [generation, project]
+        tradition:
+          $ref: "#/components/schemas/Tradition"
+        style:
+          type: string
+        tempo:
+          type: number
+        createdAt:
+          type: string
+          format: date-time

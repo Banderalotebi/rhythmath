@@ -1,0 +1,21 @@
+{
+  "name": "@workspace/engine",
+  "version": "0.1.0",
+  "description": "Rhythmath groove engine: rhythm grammars, metrics, generation, MIDI and audio analysis. Pure TypeScript.",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@tonejs/midi": "^2.0.28"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  }
+}

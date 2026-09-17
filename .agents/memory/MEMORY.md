@@ -1,0 +1,2 @@
+- [Engine design invariants](engine-invariants.md) — determinism, meter-as-data, tempo semantics, score scale; decisions the UI and API must respect.
+- [Delegation lessons](delegation-lessons.md) — design subagent stubs everything it cannot import; give it real engine/audio modules first. Sequential GitHub Contents-API pushes only.

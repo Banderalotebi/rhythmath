@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Rhythmath"
+description = "Rhythmath is an open-source, in-house AI music engine that treats rhythm as mathematics. Musicians pick a tradition (Rio samba batucada or Arabic iqāʿāt), generate 100 candidate grooves that are scored and narrowed to the five best, hear them with real sample kits, edit every hit on a step grid, analyze their own drum loops, and export standard MIDI — with no third-party AI APIs anywhere."
+version = "1.0.0"
+id = "artifacts/rhythmath"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19865
+
+[services.development]
+run = "pnpm --filter @workspace/rhythmath run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/rhythmath", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/rhythmath/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19865"
+BASE_PATH = "/"
